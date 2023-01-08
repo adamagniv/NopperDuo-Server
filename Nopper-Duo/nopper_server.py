@@ -85,6 +85,7 @@ class NopperServer(BaseHTTPRequestHandler):
 
     def get_wait_for_partner(self, headers):
         global session_id_dic
+        self.send_response(200)
 
         self.send_response(200)
         try:
@@ -118,6 +119,7 @@ class NopperServer(BaseHTTPRequestHandler):
 
     def get_menu_done_wait(self, headers):
         global session_id_dic
+        self.send_response(200)
 
         self.send_response(200)
         try:
