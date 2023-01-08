@@ -1,9 +1,9 @@
 from urllib.parse import unquote as url_decode
 from uuid import uuid4
 from time import sleep
-from threading import Mutex
+from threading import Lock as Mutex
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from SocketServer import ThreadingMixIn
+from socketserver import ThreadingMixIn
 from enum import IntEnum, auto
 
 hostName = "localhost"
@@ -21,12 +21,12 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     """Handle requests in a separate thread."""
 
 class NopperState(IntEnum):
-    login = auto
-    paired = auto
-    menu_done = auto
-    ready_to_send_line = auto
-    waiting_to_receive_line = auto
-    nopper_state_length = auto
+    login = auto()
+    paired = auto()
+    menu_done = auto()
+    ready_to_send_line = auto()
+    waiting_to_receive_line = auto()
+    nopper_state_length = auto()
 
 class NopperSession:
     def __init__(self):
@@ -63,10 +63,9 @@ class NopperServer(BaseHTTPRequestHandler):
         global session_id
         global session_id_dic
         global login_mutex
-
         self.send_response(200)
 
-        with login_mutex as _:
+        with login_mutex:
             # If it's a new couple
             if count_connection == 0:
                 role = MASTER
@@ -204,7 +203,7 @@ class NopperServer(BaseHTTPRequestHandler):
 
         self.send_response(200)
         try:
-            req_role, req_session_id = headers["X-NopperId"].split(':')
+            req_role, req_session_id = self.headers["X-NopperId"].split(':')
         except Exception:
             self.wfile.write(b"Invalid session ID")
             return
