@@ -1,8 +1,7 @@
-import sys
 from .nopper_server import *
 
 def main():
-    webServer = HTTPServer((hostName, serverPort), NopperServer)
+    webServer = ThreadedHTTPServer((hostName, serverPort), NopperServer)
     print("Server started http://%s:%s" % (hostName, serverPort))
 
     try:
@@ -14,4 +13,4 @@ def main():
     print("Server stopped.")
 
 if __name__ == '__main__':
-    sys.exit(main())
+    raise SystemExit(main())
