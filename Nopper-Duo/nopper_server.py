@@ -1,4 +1,3 @@
-from urllib.parse import unquote as url_decode
 from uuid import uuid4
 from time import sleep
 from threading import Lock as Mutex
@@ -220,7 +219,7 @@ class NopperServer(BaseHTTPRequestHandler):
             self.do_disconnect()
             return
 
-        current_session.line = url_decode(self.rfile.read())
+        current_session.line = self.rfile.read()
         current_session.state = NopperState.waiting_to_receive_line
 
     def do_disconnect(self):
