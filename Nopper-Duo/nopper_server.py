@@ -23,9 +23,9 @@ class NopperServer(BaseHTTPRequestHandler):
     def do_GET(self):
         if (self.path.strip('/') == "login"):
             self.get_login()
-        if (self.path.strip('/') == "wait_for_partner"):
+        elif (self.path.strip('/') == "wait_for_partner"):
             self.get_wait_for_partner(self.headers)
-        if (self.path.strip('/') == "menu_done_wait"):
+        elif (self.path.strip('/') == "menu_done_wait"):
             self.get_menu_done_wait(self.headers)
         else:
             self.send_response(404)
@@ -34,10 +34,7 @@ class NopperServer(BaseHTTPRequestHandler):
         global count_connection
         global session_id
         global session_id_dic
-
         self.send_response(200)
-        self.send_header("Content-type", "text/html")
-        self.end_headers()
 
         #if it's a new couple
         if ((count_connection % 2) == 0):
@@ -54,6 +51,7 @@ class NopperServer(BaseHTTPRequestHandler):
 
     def get_wait_for_partner(self, headers):
         global session_id_dic
+        self.send_response(200)
 
         req_role = headers["X-NopperId"].split(':')[0].strip()
         req_session_id = headers["X-NopperId"].split(':')[1].strip()
@@ -79,6 +77,7 @@ class NopperServer(BaseHTTPRequestHandler):
 
     def get_menu_done_wait(self, headers):
         global session_id_dic
+        self.send_response(200)
 
         req_role = headers["X-NopperId"].split(':')[0].strip()
         req_session_id = headers["X-NopperId"].split(':')[1].strip()
