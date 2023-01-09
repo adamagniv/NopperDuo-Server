@@ -12,6 +12,7 @@ MASTER='master'
 SLAVE='slave'
 
 count_connection = 0
+server_accept_clients = True
 session_id=None
 session_id_dic = [{}, {}]
 login_mutex = Mutex()
@@ -63,23 +64,30 @@ class NopperServer(BaseHTTPRequestHandler):
         global session_id
         global session_id_dic
         global login_mutex
+        global server_accept_clients
         self.send_response(200)
         self.end_headers()
 
         with login_mutex:
-            # If it's a new couple
-            if count_connection == 0:
-                role = MASTER
-                session_id = str(uuid4())
-                session_id_dic[0][session_id] = NopperSession()
-            elif count_connection == 1:
-                role = SLAVE
-                session_id_dic[1][session_id] = NopperSession()
-            else:
-                self.wfile.write(b"Can't have more than two participants")
-                return
+            if server_accept_clients:
+                # If it's a new couple
+                if count_connection == 0:
+                    role = MASTER
+                    session_id = str(uuid4())
+                    session_id_dic[0][session_id] = NopperSession()
+                elif count_connection == 1:
+                    role = SLAVE
+                    session_id_dic[1][session_id] = NopperSession()
+                else:
+                    self.wfile.write(b"Can't have more than two participants")
+                    return
 
-            count_connection += 1
+                count_connection += 1
+                if count_connection == 2:
+                    server_accept_clients = False
+            else:
+                self.wfile.write(b"Server doesn't listen to new connections now")
+                return
         
         self.wfile.write("{}:{}".format(role, session_id).encode("utf-8"))
 
@@ -229,7 +237,6 @@ class NopperServer(BaseHTTPRequestHandler):
         self.wfile.write(b"ok")
 
     def get_disconnect(self):
-        global session_id_dic
         self.send_response(200)
         self.end_headers()
         
@@ -238,6 +245,10 @@ class NopperServer(BaseHTTPRequestHandler):
 
     def do_disconnect(self):
         global session_id_dic
+        global login_mutex
+        global count_connection
+        global server_accept_clients
+        global session_id
         
         try:
             req_role, req_session_id = self.headers["X-NopperId"].split(':')
@@ -246,4 +257,15 @@ class NopperServer(BaseHTTPRequestHandler):
             return
 
         role_index = 0 if req_role == MASTER else 1
-        del session_id_dic[role_index][req_session_id]
+        current_session = session_id_dic[role_index].get(req_session_id)
+        if current_session is not None:
+            with login_mutex:
+                del session_id_dic[role_index][req_session_id]
+                count_connection -= 1
+
+                if count_connection == 0 and not server_accept_clients:
+                    server_accept_clients = True
+                    session_id = None
+                    session_id_dic = [{}, {}]
+        else:
+            self.wfile.write(b"Invalid role for session ID")
