@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from enum import IntEnum, auto
 
-hostName = "localhost"
+hostName = "0.0.0.0"
 serverPort = 8080
 
 MASTER='master'
@@ -22,7 +22,6 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 class NopperState(IntEnum):
     login = auto()
     paired = auto()
-    menu_done = auto()
     ready_to_send_line = auto()
     waiting_to_receive_line = auto()
     nopper_state_length = auto()
@@ -43,15 +42,17 @@ class NopperServer(BaseHTTPRequestHandler):
         elif (self.path.strip('/') == "get_partner_line"):
             self.get_partner_line(self.headers)
         elif (self.path.strip('/') == "disconnect"):
-            self.do_disconnect()
+            self.get_disconnect()
         else:
             self.send_response(404)
+            self.end_headers()
 
     def do_POST(self):
         if self.path.strip('/') == "send_line":
             self.accept_line()
         else:
             self.send_response(404)
+            self.end_headers()
 
     def get_partner_session(self, my_role, session_id):
         partner_index = 1 if my_role == MASTER else 0
@@ -63,6 +64,7 @@ class NopperServer(BaseHTTPRequestHandler):
         global session_id_dic
         global login_mutex
         self.send_response(200)
+        self.end_headers()
 
         with login_mutex:
             # If it's a new couple
@@ -79,13 +81,13 @@ class NopperServer(BaseHTTPRequestHandler):
 
             count_connection += 1
         
-        self.wfile.write("%s:%s".format(role, session_id).encode("utf-8"))
+        self.wfile.write("{}:{}".format(role, session_id).encode("utf-8"))
 
     def get_wait_for_partner(self, headers):
         global session_id_dic
         self.send_response(200)
+        self.end_headers()
 
-        self.send_response(200)
         try:
             req_role, req_session_id = headers["X-NopperId"].split(':')
         except Exception:
@@ -118,8 +120,8 @@ class NopperServer(BaseHTTPRequestHandler):
     def get_menu_done_wait(self, headers):
         global session_id_dic
         self.send_response(200)
+        self.end_headers()
 
-        self.send_response(200)
         try:
             req_role, req_session_id = headers["X-NopperId"].split(':')
         except Exception:
@@ -134,12 +136,12 @@ class NopperServer(BaseHTTPRequestHandler):
 
         role_index = 0 if req_role == MASTER else 1
         current_session = session_id_dic[role_index].get(req_session_id)
-        if current_session is None or current_session.state > NopperState.menu_done:
+        if current_session is None or current_session.state < NopperState.paired:
             self.wfile.write(b"fail")
 
             return
 
-        current_session.state = NopperState.menu_done
+        current_session.state = NopperState.ready_to_send_line if req_role == MASTER else NopperState.waiting_to_receive_line
 
         for _ in range(0, req_wait):
             parter_session = self.get_partner_session(req_role, req_session_id)
@@ -148,7 +150,7 @@ class NopperServer(BaseHTTPRequestHandler):
                 self.do_disconnect()
                 return
 
-            if parter_session.state == NopperState.menu_done:
+            if parter_session.state > NopperState.paired:
                 self.wfile.write(b"ok")
 
                 return
@@ -158,8 +160,9 @@ class NopperServer(BaseHTTPRequestHandler):
 
     def get_partner_line(self, headers):
         global session_id_dic
-
         self.send_response(200)
+        self.end_headers()
+
         try:
             req_role, req_session_id = headers["X-NopperId"].split(':')
         except Exception:
@@ -187,7 +190,7 @@ class NopperServer(BaseHTTPRequestHandler):
                     return
 
                 if parter_session.state == NopperState.waiting_to_receive_line and parter_session.line:
-                    self.wfile.write(parter_session.line)
+                    self.wfile.write(b"ok:%b" % parter_session.line)
                     parter_session.line = None
                     current_session.state = NopperState.ready_to_send_line
                     return
@@ -199,8 +202,9 @@ class NopperServer(BaseHTTPRequestHandler):
 
     def accept_line(self):
         global session_id_dic
-
         self.send_response(200)
+        self.end_headers()
+
         try:
             req_role, req_session_id = self.headers["X-NopperId"].split(':')
         except Exception:
@@ -219,13 +223,22 @@ class NopperServer(BaseHTTPRequestHandler):
             self.do_disconnect()
             return
 
-        current_session.line = self.rfile.read()
+        content_length = int(self.headers['Content-Length'])
+        current_session.line = self.rfile.read(content_length)
         current_session.state = NopperState.waiting_to_receive_line
+        self.wfile.write(b"ok")
+
+    def get_disconnect(self):
+        global session_id_dic
+        self.send_response(200)
+        self.end_headers()
+        
+        self.do_disconnect()
+        self.wfile.write(b"ok")
 
     def do_disconnect(self):
         global session_id_dic
-
-        self.send_response(200)
+        
         try:
             req_role, req_session_id = self.headers["X-NopperId"].split(':')
         except Exception:
